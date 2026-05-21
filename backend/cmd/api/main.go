@@ -53,7 +53,7 @@ func main() {
 			}
 			return utils.SendError(c, err.Error(), code)
 		},
-		BodyLimit: 60 * 1024 * 1024, // Set body limit to 60MB to support video uploads
+		BodyLimit: int(cfg.MaxMediaSizeMB+10) * 1024 * 1024, // Dynamically set body limit based on config plus buffer
 	})
 
 	// 5. Register Global Middlewares
