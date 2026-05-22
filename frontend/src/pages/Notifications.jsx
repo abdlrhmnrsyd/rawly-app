@@ -278,11 +278,28 @@ const Notifications = () => {
             }}
           >
             {/* Left side: Media */}
-            <div style={{ flex: '1.2', minWidth: '300px', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', minHeight: '350px' }}>
+            <div className="modal-media-wrap">
+              <div 
+                className="modal-media-blur-bg"
+                style={
+                  selectedPost.media_type === 'image'
+                    ? { backgroundImage: `url(${selectedPost.media_url.startsWith('http') ? selectedPost.media_url : BACKEND_HOST + selectedPost.media_url})` }
+                    : { background: 'linear-gradient(to bottom, #111, #000)' }
+                }
+              />
               {selectedPost.media_type === 'video' ? (
-                <video src={selectedPost.media_url.startsWith('http') ? selectedPost.media_url : `${BACKEND_HOST}${selectedPost.media_url}`} style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain' }} controls autoPlay />
+                <video 
+                  src={selectedPost.media_url.startsWith('http') ? selectedPost.media_url : `${BACKEND_HOST}${selectedPost.media_url}`} 
+                  className="modal-media-main"
+                  controls 
+                  autoPlay 
+                />
               ) : (
-                <img src={selectedPost.media_url.startsWith('http') ? selectedPost.media_url : `${BACKEND_HOST}${selectedPost.media_url}`} style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain' }} alt="Post content" />
+                <img 
+                  src={selectedPost.media_url.startsWith('http') ? selectedPost.media_url : `${BACKEND_HOST}${selectedPost.media_url}`} 
+                  className="modal-media-main"
+                  alt="Post content" 
+                />
               )}
             </div>
 

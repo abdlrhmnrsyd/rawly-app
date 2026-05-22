@@ -46,6 +46,9 @@ const Feed = () => {
   const [reportReason, setReportReason] = useState('');
   const [reporting, setReporting] = useState(false);
 
+  // Like animations state
+  const [animatingLikes, setAnimatingLikes] = useState({});
+
   // Fetch initial posts feed
   useEffect(() => {
     fetchFeed(1, true);
@@ -95,6 +98,18 @@ const Feed = () => {
 
   // Like / Unlike action
   const handleLike = async (postId, likedByMe) => {
+    // Trigger pop animation if liking
+    if (!likedByMe) {
+      setAnimatingLikes(prev => ({ ...prev, [postId]: true }));
+      setTimeout(() => {
+        setAnimatingLikes(prev => {
+          const next = { ...prev };
+          delete next[postId];
+          return next;
+        });
+      }, 600);
+    }
+
     // Optimistic UI updates
     setPosts(prevPosts => 
       prevPosts.map(post => {
@@ -361,6 +376,10 @@ const Feed = () => {
 
         {mediaPreview ? (
           <div className="preview-container">
+            <div 
+              className="preview-media-blur-bg" 
+              style={mediaType === 'image' ? { backgroundImage: `url(${mediaPreview})` } : {}} 
+            />
             {mediaType === 'image' ? (
               <img src={mediaPreview} className="media-preview" alt="Preview" />
             ) : (
@@ -488,6 +507,10 @@ const Feed = () => {
 
                 {/* Post Media */}
                 <div className="post-media-container">
+                  <div 
+                    className="post-media-blur-bg" 
+                    style={post.media_type === 'image' ? { backgroundImage: `url(${formattedMediaUrl})` } : { background: 'linear-gradient(to bottom, #111, #000)' }}
+                  />
                   {post.media_type === 'image' ? (
                     <img 
                       src={formattedMediaUrl} 
@@ -511,7 +534,7 @@ const Feed = () => {
                     className={`action-btn ${post.liked_by_me ? 'liked' : ''}`}
                     onClick={() => handleLike(post.id, post.liked_by_me)}
                   >
-                    <Heart size={20} />
+                    <Heart size={20} className={animatingLikes[post.id] ? 'heart-pop' : ''} />
                     <span>{post.likes_count}</span>
                   </button>
 

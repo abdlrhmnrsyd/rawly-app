@@ -39,6 +39,8 @@ const Login = () => {
 
   return (
     <div className="auth-page">
+      <div className="float-bg-orb-1" style={{ top: '15%', left: '10%' }}></div>
+      <div className="float-bg-orb-2" style={{ bottom: '15%', right: '10%' }}></div>
       <div className="auth-card glass fade-in">
         <div className="auth-header">
           <div className="auth-logo">

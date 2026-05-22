@@ -70,6 +70,8 @@ const Register = () => {
 
   return (
     <div className="auth-page">
+      <div className="float-bg-orb-1" style={{ top: '10%', right: '15%' }}></div>
+      <div className="float-bg-orb-2" style={{ bottom: '20%', left: '10%' }}></div>
       <div className="auth-card glass fade-in">
         <div className="auth-header">
           <div className="auth-logo">

@@ -70,16 +70,36 @@
   position: relative;
   border-radius: var(--radius-md);
   overflow: hidden;
-  max-height: 300px;
+  max-height: 380px;
   border: 1px solid hsl(var(--border-color));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #08090c;
+  width: 100%;
+}
+
+.preview-media-blur-bg {
+  position: absolute;
+  top: -20px;
+  left: -20px;
+  right: -20px;
+  bottom: -20px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(24px) brightness(0.4);
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.85;
 }
 
 .media-preview {
+  position: relative;
+  z-index: 2;
   width: 100%;
   height: auto;
-  max-height: 300px;
+  max-height: 380px;
   object-fit: contain;
-  background: #000;
 }
 
 .remove-media-btn {
@@ -143,6 +163,13 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  transition: transform var(--transition-normal), border-color var(--transition-fast), box-shadow var(--transition-normal);
+}
+
+.post-card:hover {
+  transform: translateY(-2px);
+  border-color: hsla(var(--primary), 0.25);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 20px hsla(var(--primary), 0.05);
 }
 
 .post-header {
@@ -250,6 +277,7 @@
 
 /* Post Media */
 .post-media-container {
+  position: relative;
   border-radius: var(--radius-md);
   overflow: hidden;
   background: #08090c;
@@ -257,14 +285,33 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  max-height: 600px;
+  width: 100%;
+}
+
+.post-media-blur-bg {
+  position: absolute;
+  top: -20px;
+  left: -20px;
+  right: -20px;
+  bottom: -20px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(24px) brightness(0.4);
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.85;
 }
 
 .post-image {
+  position: relative;
+  z-index: 2;
   width: 100%;
   height: auto;
-  max-height: 480px;
+  max-height: 600px;
   object-fit: contain;
   transition: transform var(--transition-slow);
+  display: block;
 }
 
 .post-image:hover {
@@ -272,9 +319,13 @@
 }
 
 .post-video {
+  position: relative;
+  z-index: 2;
   width: 100%;
-  max-height: 480px;
+  max-height: 600px;
   outline: none;
+  object-fit: contain;
+  display: block;
 }
 
 /* Action Bar */
