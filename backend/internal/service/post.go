@@ -59,20 +59,37 @@ func (s *postService) CreatePost(userID uuid.UUID, caption string, mediaFiles []
 		visibility = "public"
 	}
 
-	post := &model.Post{
-		UserID:     userID,
-		Caption:    caption,
-		MediaURL:   mediaFiles[0].MediaURL, // First media URL as fallback
-		MediaType:  mediaFiles[0].MediaType,
-		Media:      mediaFiles,
-		Visibility: visibility,
-		AlbumID:    albumID,
+	var firstPost *model.Post
+
+	for i, mediaFile := range mediaFiles {
+		// Each post gets its own post_media array containing only its specific media
+		singleMedia := []model.PostMedia{
+			{
+				MediaURL:  mediaFile.MediaURL,
+				MediaType: mediaFile.MediaType,
+			},
+		}
+
+		post := &model.Post{
+			UserID:     userID,
+			Caption:    caption,
+			MediaURL:   mediaFile.MediaURL,
+			MediaType:  mediaFile.MediaType,
+			Media:      singleMedia,
+			Visibility: visibility,
+			AlbumID:    albumID,
+		}
+
+		if err := s.postRepo.CreatePost(post); err != nil {
+			return nil, err
+		}
+
+		if i == 0 {
+			firstPost = post
+		}
 	}
 
-	if err := s.postRepo.CreatePost(post); err != nil {
-		return nil, err
-	}
-	return post, nil
+	return firstPost, nil
 }
 
 func (s *postService) DeletePost(userID uuid.UUID, role string, postID uuid.UUID) error {
