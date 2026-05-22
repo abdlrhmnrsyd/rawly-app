@@ -179,7 +179,7 @@ func getPaginationParams(c *fiber.Ctx) (limit int, offset int) {
 	}
 
 	limit = 10
-	if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 && parsedLimit <= 100 {
+	if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 && parsedLimit <= 1000 {
 		limit = parsedLimit
 	}
 

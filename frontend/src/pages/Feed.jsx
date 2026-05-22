@@ -14,66 +14,39 @@ const BACKEND_HOST = API_BASE_URL.replace('/api', '');
 
 // Premium Carousel component for multi-media rendering
 const PostMedia = ({ media, defaultUrl, defaultType }) => {
-  const [index, setIndex] = useState(0);
-
   // Fallback to legacy single file parameters if media array is empty
   const items = media && media.length > 0 ? media : [{ media_url: defaultUrl, media_type: defaultType }];
 
-  const nextMedia = (e) => {
-    e.stopPropagation();
-    setIndex((prev) => (prev + 1) % items.length);
-  };
-
-  const prevMedia = (e) => {
-    e.stopPropagation();
-    setIndex((prev) => (prev - 1 + items.length) % items.length);
-  };
-
-  const currentItem = items[index];
-  if (!currentItem || !currentItem.media_url) return null;
-  const formattedUrl = currentItem.media_url.startsWith('http') ? currentItem.media_url : `${BACKEND_HOST}${currentItem.media_url}`;
-
   return (
-    <div className="post-media-container">
-      <div 
-        className="post-media-blur-bg" 
-        style={currentItem.media_type === 'image' ? { backgroundImage: `url(${formattedUrl})` } : { background: 'linear-gradient(to bottom, #111, #000)' }}
-      />
-      {currentItem.media_type === 'image' ? (
-        <img 
-          src={formattedUrl} 
-          className="post-image" 
-          alt="Post content" 
-          loading="lazy"
-        />
-      ) : (
-        <video 
-          src={formattedUrl} 
-          className="post-video" 
-          controls 
-          preload="metadata"
-        />
-      )}
-      
-      {items.length > 1 && (
-        <>
-          <button className="carousel-btn prev" onClick={prevMedia}>
-            &#8249;
-          </button>
-          <button className="carousel-btn next" onClick={nextMedia}>
-            &#8250;
-          </button>
-          <div className="carousel-dots">
-            {items.map((_, i) => (
-              <span 
-                key={i} 
-                className={`carousel-dot ${i === index ? 'active' : ''}`}
-                onClick={(e) => { e.stopPropagation(); setIndex(i); }}
+    <div className="post-media-list" style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
+      {items.map((item, idx) => {
+        if (!item || !item.media_url) return null;
+        const formattedUrl = item.media_url.startsWith('http') ? item.media_url : `${BACKEND_HOST}${item.media_url}`;
+        
+        return (
+          <div key={idx} className="post-media-container" style={{ position: 'relative', overflow: 'hidden', width: '100%' }}>
+            <div 
+              className="post-media-blur-bg" 
+              style={item.media_type === 'image' ? { backgroundImage: `url(${formattedUrl})` } : { background: 'linear-gradient(to bottom, #111, #000)' }}
+            />
+            {item.media_type === 'image' ? (
+              <img 
+                src={formattedUrl} 
+                className="post-image" 
+                alt="Post content" 
+                loading="lazy"
               />
-            ))}
+            ) : (
+              <video 
+                src={formattedUrl} 
+                className="post-video" 
+                controls 
+                preload="metadata"
+              />
+            )}
           </div>
-        </>
-      )}
+        );
+      })}
     </div>
   );
 };
