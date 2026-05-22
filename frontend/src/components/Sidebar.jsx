@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { Home, Bell, User, PlusSquare, LogOut, ShieldAlert, Sparkles } from 'lucide-react';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import './Sidebar.css';
 
 export default function Sidebar({ onCreatePostClick }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [unreadCount, setUnreadCount] = useState(0);
+  const { logout } = useAuth();
   
   const username = localStorage.getItem('username') || 'profile';
   const role = localStorage.getItem('role');
@@ -35,17 +37,7 @@ export default function Sidebar({ onCreatePostClick }) {
   }, [location.pathname]); // Fetch on route change
 
   const handleLogout = async () => {
-    const refreshToken = localStorage.getItem('refresh_token');
-    if (refreshToken) {
-      try {
-        await api.post('/auth/logout', { refresh_token: refreshToken });
-      } catch (err) {
-        console.error('Failed to logout gracefully from backend', err);
-      }
-    }
-    
-    // Clear storage
-    localStorage.clear();
+    await logout();
     navigate('/login');
   };
 
