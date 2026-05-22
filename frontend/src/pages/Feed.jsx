@@ -419,19 +419,7 @@ const Feed = () => {
         }
       });
 
-      if (response.success && response.data) {
-        // Build the new post to insert into the top of the feed immediately
-        const createdPost = {
-          ...response.data,
-          username: user.username,
-          avatar: user.avatar,
-          likes_count: 0,
-          comments_count: 0,
-          liked_by_me: false
-        };
-
-        setPosts(prev => [createdPost, ...prev]);
-        
+      if (response.success) {
         // Reset form state
         setCaption('');
         setAlbumId('');
@@ -440,6 +428,9 @@ const Feed = () => {
         mediaPreviews.forEach(p => URL.revokeObjectURL(p.url));
         setMediaFiles([]);
         setMediaPreviews([]);
+        
+        // Reload feed to get all newly created split posts
+        fetchFeed(1, true);
       }
     } catch (err) {
       alert(err.message || "Failed to create post. Media size limit could be exceeded.");
