@@ -13,15 +13,18 @@ type Post struct {
 	Caption   string         `gorm:"type:text" json:"caption"`
 	MediaURL  string         `gorm:"type:varchar(255);not null" json:"media_url"`
 	MediaType string         `gorm:"type:varchar(20);not null" json:"media_type"` // 'image', 'video'
+	AlbumID   *uuid.UUID     `gorm:"type:uuid;index" json:"album_id,omitempty"`
+	Visibility string        `gorm:"type:varchar(20);default:'public';not null" json:"visibility"` // 'public', 'followers'
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 
 	// Relationships
-	User     *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Comments []Comment `gorm:"foreignKey:PostID;constraint:OnDelete:CASCADE" json:"-"`
-	Likes    []Like    `gorm:"foreignKey:PostID;constraint:OnDelete:CASCADE" json:"-"`
-	Reports  []Report  `gorm:"foreignKey:PostID;constraint:OnDelete:CASCADE" json:"-"`
+	User     *User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Comments []Comment   `gorm:"foreignKey:PostID;constraint:OnDelete:CASCADE" json:"-"`
+	Likes    []Like      `gorm:"foreignKey:PostID;constraint:OnDelete:CASCADE" json:"-"`
+	Reports  []Report    `gorm:"foreignKey:PostID;constraint:OnDelete:CASCADE" json:"-"`
+	Media    []PostMedia `gorm:"foreignKey:PostID;constraint:OnDelete:CASCADE" json:"media,omitempty"`
 }
 
 // BeforeCreate hook to generate UUID before insertion

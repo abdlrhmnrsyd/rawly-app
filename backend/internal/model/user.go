@@ -16,6 +16,7 @@ type User struct {
 	Bio       *string        `gorm:"type:text" json:"bio"`
 	Role      string         `gorm:"type:varchar(20);default:'user';not null" json:"role"` // 'user', 'admin'
 	IsBanned  bool           `gorm:"default:false;not null" json:"is_banned"`
+	IsPrivate bool           `gorm:"default:false;not null" json:"is_private"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
@@ -28,6 +29,7 @@ type User struct {
 	Following     []Follow       `gorm:"foreignKey:FollowerID;constraint:OnDelete:CASCADE" json:"-"`
 	Notifications []Notification `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
 	ReportsSent   []Report       `gorm:"foreignKey:ReporterID;constraint:OnDelete:CASCADE" json:"-"`
+	Albums        []Album        `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
 }
 
 // BeforeCreate hook to generate UUID before insertion

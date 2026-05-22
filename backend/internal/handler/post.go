@@ -8,6 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/rawly-app/backend/internal/config"
+	"github.com/rawly-app/backend/internal/model"
 	"github.com/rawly-app/backend/internal/service"
 	"github.com/rawly-app/backend/internal/utils"
 )
@@ -28,53 +29,55 @@ func (h *PostHandler) CreatePost(c *fiber.Ctx) error {
 	}
 
 	caption := c.FormValue("caption")
-
-	// Parse file attachment
-	fileHeader, err := c.FormFile("media")
-	if err != nil {
-		return utils.SendError(c, "Media file is required under key 'media' in form-data", fiber.StatusBadRequest)
+	visibility := c.FormValue("visibility", "public")
+	albumIDStr := c.FormValue("album_id")
+	var albumID *uuid.UUID
+	if albumIDStr != "" && albumIDStr != "null" && albumIDStr != "undefined" {
+		parsedAlbumID, err := uuid.Parse(albumIDStr)
+		if err == nil {
+			albumID = &parsedAlbumID
+		}
 	}
 
-	// Validate media file
+	// Parse multiple files attachment
+	form, err := c.MultipartForm()
+	if err != nil {
+		return utils.SendError(c, "Failed to parse multipart form-data", fiber.StatusBadRequest)
+	}
+
+	files := form.File["media"]
+	if len(files) == 0 {
+		return utils.SendError(c, "At least one media file is required under key 'media' in form-data", fiber.StatusBadRequest)
+	}
+
+	var mediaItems []model.PostMedia
 	maxBytes := h.cfg.MaxMediaSizeMB * 1024 * 1024
-	// We save posts to "uploads/posts" or "uploads/videos" depending on its validated MIME type.
-	// We check using our uploader utility which also outputs the detected media type.
-	// Initially, write it to a general uploads/posts folder. Our utility will classify it.
-	webPath, mediaType, err := utils.ValidateAndSaveUploadedFile(fileHeader, "uploads/posts", maxBytes, false)
-	if err != nil {
-		return utils.SendError(c, err.Error(), fiber.StatusBadRequest)
+
+	for _, fileHeader := range files {
+		// Detect folder classification
+		targetDir := "uploads/posts"
+		if strings.HasPrefix(fileHeader.Header.Get("Content-Type"), "video/") || 
+		   strings.HasSuffix(strings.ToLower(fileHeader.Filename), ".mp4") ||
+		   strings.HasSuffix(strings.ToLower(fileHeader.Filename), ".mov") ||
+		   strings.HasSuffix(strings.ToLower(fileHeader.Filename), ".avi") ||
+		   strings.HasSuffix(strings.ToLower(fileHeader.Filename), ".mkv") {
+			targetDir = "uploads/videos"
+		}
+
+		webPath, mediaType, err := utils.ValidateAndSaveUploadedFile(fileHeader, targetDir, maxBytes, false)
+		if err != nil {
+			return utils.SendError(c, err.Error(), fiber.StatusBadRequest)
+		}
+
+		mediaItems = append(mediaItems, model.PostMedia{
+			MediaURL:  webPath,
+			MediaType: mediaType,
+		})
 	}
 
-	// Optional: if the media type is video, we could move it to "uploads/videos".
-	// But our utility already saved it in target directory ("uploads/posts").
-	// To strictly use "uploads/videos" for videos, we can run a check beforehand, but it's simpler and perfectly valid to save it under uploads/posts or let the utility write to its classification folder if preferred.
-	// Since the prompt asks for "uploads/posts/" and "uploads/videos/", let's make it classification folder based!
-	// Wait! If the user wants uploads/posts/ and uploads/videos/, we can do a dry run check on the file MIME type or we can just let it save.
-	// Let's check how we can do it: we inspect the file header's content-type or standard extension.
-	// If it's a video, targetDir = "uploads/videos", else "uploads/posts". This is incredibly clean!
-	// Let's implement that. Let's look at the content type from the form header directly to decide the folder:
-	// But header content type can be forged, so our utility validates the magic bytes inside.
-	// We can check if strings.HasPrefix(fileHeader.Header.Get("Content-Type"), "video/")
-	// targetDir = "uploads/videos", else "uploads/posts". This is highly robust!
-	// Let's write this target path classification:
-	targetDir := "uploads/posts"
-	if strings.HasPrefix(fileHeader.Header.Get("Content-Type"), "video/") || 
-	   strings.HasSuffix(strings.ToLower(fileHeader.Filename), ".mp4") ||
-	   strings.HasSuffix(strings.ToLower(fileHeader.Filename), ".mov") ||
-	   strings.HasSuffix(strings.ToLower(fileHeader.Filename), ".avi") ||
-	   strings.HasSuffix(strings.ToLower(fileHeader.Filename), ".mkv") {
-		targetDir = "uploads/videos"
-	}
-
-	// Now validate and save it in the correct target folder!
-	webPath, mediaType, err = utils.ValidateAndSaveUploadedFile(fileHeader, targetDir, maxBytes, false)
+	post, err := h.postService.CreatePost(userID, caption, mediaItems, visibility, albumID)
 	if err != nil {
-		return utils.SendError(c, err.Error(), fiber.StatusBadRequest)
-	}
-
-	post, err := h.postService.CreatePost(userID, caption, webPath, mediaType)
-	if err != nil {
-		return utils.SendError(c, "Failed to create post record", fiber.StatusInternalServerError)
+		return utils.SendError(c, "Failed to create post record: "+err.Error(), fiber.StatusInternalServerError)
 	}
 
 	return utils.SendSuccess(c, "Post created successfully", post, fiber.StatusCreated)

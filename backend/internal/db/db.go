@@ -63,7 +63,9 @@ func runMigrations(db *gorm.DB) error {
 
 	err := db.AutoMigrate(
 		&model.User{},
+		&model.Album{},
 		&model.Post{},
+		&model.PostMedia{},
 		&model.Comment{},
 		&model.Like{},
 		&model.Follow{},

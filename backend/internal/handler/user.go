@@ -21,9 +21,10 @@ func NewUserHandler(cfg *config.Config, userService service.UserService) *UserHa
 }
 
 type editProfileReq struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Bio      string `json:"bio"`
+	Username  string `json:"username"`
+	Email     string `json:"email"`
+	Bio       string `json:"bio"`
+	IsPrivate bool   `json:"is_private"`
 }
 
 func (h *UserHandler) GetProfile(c *fiber.Ctx) error {
@@ -70,7 +71,7 @@ func (h *UserHandler) EditProfile(c *fiber.Ctx) error {
 		return utils.SendError(c, "Invalid email format", fiber.StatusBadRequest)
 	}
 
-	user, err := h.userService.EditProfile(userID, req.Username, req.Email, req.Bio)
+	user, err := h.userService.EditProfile(userID, req.Username, req.Email, req.Bio, req.IsPrivate)
 	if err != nil {
 		if errors.Is(err, service.ErrUsernameTaken) {
 			return utils.SendError(c, err.Error(), fiber.StatusConflict)
@@ -79,10 +80,11 @@ func (h *UserHandler) EditProfile(c *fiber.Ctx) error {
 	}
 
 	return utils.SendSuccess(c, "Profile updated successfully", fiber.Map{
-		"id":       user.ID,
-		"username": user.Username,
-		"email":    user.Email,
-		"bio":      user.Bio,
+		"id":         user.ID,
+		"username":   user.Username,
+		"email":      user.Email,
+		"bio":        user.Bio,
+		"is_private": user.IsPrivate,
 	}, fiber.StatusOK)
 }
 
@@ -168,6 +170,79 @@ func (h *UserHandler) GetMe(c *fiber.Ctx) error {
 	}
 
 	return utils.SendSuccess(c, "Current user retrieved successfully", profile, fiber.StatusOK)
+}
+
+func (h *UserHandler) GetFollowRequests(c *fiber.Ctx) error {
+	userID, err := getAuthenticatedUserID(c)
+	if err != nil {
+		return utils.SendError(c, "Unauthorized", fiber.StatusUnauthorized)
+	}
+
+	requests, err := h.userService.GetPendingFollowRequests(userID)
+	if err != nil {
+		return utils.SendError(c, "Failed to retrieve follow requests", fiber.StatusInternalServerError)
+	}
+
+	type RequestDetail struct {
+		ID        uuid.UUID `json:"id"`
+		UserID    uuid.UUID `json:"user_id"`
+		Username  string    `json:"username"`
+		Avatar    *string   `json:"avatar"`
+		CreatedAt string    `json:"created_at"`
+	}
+	
+	details := make([]RequestDetail, 0, len(requests))
+	for _, req := range requests {
+		if req.Follower != nil {
+			details = append(details, RequestDetail{
+				ID:        req.ID,
+				UserID:    req.FollowerID,
+				Username:  req.Follower.Username,
+				Avatar:    req.Follower.Avatar,
+				CreatedAt: req.CreatedAt.Format("2006-01-02T15:04:05Z"),
+			})
+		}
+	}
+
+	return utils.SendSuccess(c, "Follow requests retrieved successfully", details, fiber.StatusOK)
+}
+
+func (h *UserHandler) AcceptFollowRequest(c *fiber.Ctx) error {
+	userID, err := getAuthenticatedUserID(c)
+	if err != nil {
+		return utils.SendError(c, "Unauthorized", fiber.StatusUnauthorized)
+	}
+
+	followerIDStr := c.Params("followerID")
+	followerID, err := uuid.Parse(followerIDStr)
+	if err != nil {
+		return utils.SendError(c, "Invalid follower ID", fiber.StatusBadRequest)
+	}
+
+	if err := h.userService.AcceptFollowRequest(followerID, userID); err != nil {
+		return utils.SendError(c, err.Error(), fiber.StatusInternalServerError)
+	}
+
+	return utils.SendSuccess(c, "Follow request accepted", nil, fiber.StatusOK)
+}
+
+func (h *UserHandler) DeclineFollowRequest(c *fiber.Ctx) error {
+	userID, err := getAuthenticatedUserID(c)
+	if err != nil {
+		return utils.SendError(c, "Unauthorized", fiber.StatusUnauthorized)
+	}
+
+	followerIDStr := c.Params("followerID")
+	followerID, err := uuid.Parse(followerIDStr)
+	if err != nil {
+		return utils.SendError(c, "Invalid follower ID", fiber.StatusBadRequest)
+	}
+
+	if err := h.userService.DeclineFollowRequest(followerID, userID); err != nil {
+		return utils.SendError(c, err.Error(), fiber.StatusInternalServerError)
+	}
+
+	return utils.SendSuccess(c, "Follow request declined", nil, fiber.StatusOK)
 }
 
 // Helpers

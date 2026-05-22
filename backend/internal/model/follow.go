@@ -12,6 +12,7 @@ type Follow struct {
 	FollowerID  uuid.UUID `gorm:"type:uuid;not null;uniqueIndex:idx_follower_following" json:"follower_id"`
 	FollowingID uuid.UUID `gorm:"type:uuid;not null;uniqueIndex:idx_follower_following" json:"following_id"`
 	CreatedAt   time.Time `json:"created_at"`
+	Status      string    `gorm:"type:varchar(20);default:'accepted';not null" json:"status"` // 'pending', 'accepted'
 
 	// Relationships
 	Follower  *User `gorm:"foreignKey:FollowerID" json:"-"`

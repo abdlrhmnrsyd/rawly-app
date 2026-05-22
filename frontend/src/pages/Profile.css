@@ -297,3 +297,343 @@
   align-items: center;
   gap: 12px;
 }
+
+/* Private Profile Lock Screen */
+.private-profile-lock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  text-align: center;
+  border-radius: var(--radius-lg);
+  border: 1px dashed hsla(var(--border-color), 0.5);
+  margin-top: 20px;
+  background: hsla(255, 255, 255, 0.01);
+  color: hsl(var(--text-secondary));
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.private-profile-lock h3 {
+  font-family: var(--font-secondary);
+  color: hsl(var(--text-primary));
+  font-size: 1.4rem;
+  margin-bottom: 8px;
+  margin-top: 16px;
+}
+
+.private-profile-lock p {
+  font-size: 0.95rem;
+  max-width: 320px;
+  line-height: 1.5;
+}
+
+/* Follow Requests Panel */
+.follow-requests-panel {
+  width: 100%;
+  margin-bottom: 24px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid hsla(var(--primary), 0.2);
+  background: hsla(var(--primary), 0.02);
+}
+
+.follow-requests-panel h4 {
+  font-family: var(--font-secondary);
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: hsl(var(--text-primary));
+}
+
+.requests-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.request-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: hsla(255, 255, 255, 0.03);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid hsla(var(--border-color), 0.3);
+}
+
+.request-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.request-user span {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.request-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+
+/* Albums Grid */
+.albums-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+  width: 100%;
+}
+
+.album-card {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid hsla(var(--border-color), 0.5);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  background: hsla(255, 255, 255, 0.02);
+  display: flex;
+  flex-direction: column;
+}
+
+.album-card:hover {
+  transform: translateY(-4px);
+  border-color: hsla(var(--primary), 0.3);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+}
+
+.album-cover-wrap {
+  aspect-ratio: 16 / 10;
+  position: relative;
+  background: #0d0f14;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.album-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.album-cover-fallback {
+  color: hsla(var(--text-muted), 0.5);
+}
+
+.album-info-overlay {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.album-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.album-title {
+  font-family: var(--font-secondary);
+  font-weight: 700;
+  font-size: 1rem;
+  color: hsl(var(--text-primary));
+}
+
+.album-desc {
+  font-size: 0.82rem;
+  color: hsl(var(--text-secondary));
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 4px;
+  flex: 1;
+}
+
+.album-actions-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  font-size: 0.75rem;
+  color: hsl(var(--text-muted));
+}
+
+/* Privacy Toggle Switch */
+.switch-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: hsla(255, 255, 255, 0.02);
+  border: 1px solid hsla(var(--border-color), 0.5);
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+}
+
+.switch-label-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.switch-label-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: hsl(var(--text-primary));
+}
+
+.switch-label-desc {
+  font-size: 0.75rem;
+  color: hsl(var(--text-muted));
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: hsla(255, 255, 255, 0.1);
+  transition: .3s;
+  border-radius: 24px;
+  border: 1px solid hsla(var(--border-color), 0.5);
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: hsl(var(--primary));
+  border-color: transparent;
+}
+
+input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+/* Post Media & Carousel Styles (Shared with Feed) */
+.post-media-container {
+  position: relative;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #08090c;
+  border: 1px solid hsla(var(--border-color), 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-height: 600px;
+  width: 100%;
+}
+
+.post-media-blur-bg {
+  position: absolute;
+  top: -20px;
+  left: -20px;
+  right: -20px;
+  bottom: -20px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(24px) brightness(0.4);
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.carousel-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  font-size: 1.2rem;
+  transition: all 0.2s ease;
+}
+
+.carousel-btn:hover {
+  background: hsl(var(--primary));
+  border-color: transparent;
+  transform: translateY(-50%) scale(1.1);
+}
+
+.carousel-btn.prev {
+  left: 15px;
+}
+
+.carousel-btn.next {
+  right: 15px;
+}
+
+.carousel-dots {
+  position: absolute;
+  bottom: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 6px 10px;
+  border-radius: 20px;
+  backdrop-filter: blur(4px);
+}
+
+.carousel-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.carousel-dot.active {
+  background: white;
+  transform: scale(1.3);
+}

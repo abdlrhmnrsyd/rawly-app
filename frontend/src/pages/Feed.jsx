@@ -12,6 +12,72 @@ import './Feed.css';
 // Extract the host URL (e.g., http://localhost:8080) from API_BASE_URL
 const BACKEND_HOST = API_BASE_URL.replace('/api', '');
 
+// Premium Carousel component for multi-media rendering
+const PostMedia = ({ media, defaultUrl, defaultType }) => {
+  const [index, setIndex] = useState(0);
+
+  // Fallback to legacy single file parameters if media array is empty
+  const items = media && media.length > 0 ? media : [{ media_url: defaultUrl, media_type: defaultType }];
+
+  const nextMedia = (e) => {
+    e.stopPropagation();
+    setIndex((prev) => (prev + 1) % items.length);
+  };
+
+  const prevMedia = (e) => {
+    e.stopPropagation();
+    setIndex((prev) => (prev - 1 + items.length) % items.length);
+  };
+
+  const currentItem = items[index];
+  if (!currentItem || !currentItem.media_url) return null;
+  const formattedUrl = currentItem.media_url.startsWith('http') ? currentItem.media_url : `${BACKEND_HOST}${currentItem.media_url}`;
+
+  return (
+    <div className="post-media-container">
+      <div 
+        className="post-media-blur-bg" 
+        style={currentItem.media_type === 'image' ? { backgroundImage: `url(${formattedUrl})` } : { background: 'linear-gradient(to bottom, #111, #000)' }}
+      />
+      {currentItem.media_type === 'image' ? (
+        <img 
+          src={formattedUrl} 
+          className="post-image" 
+          alt="Post content" 
+          loading="lazy"
+        />
+      ) : (
+        <video 
+          src={formattedUrl} 
+          className="post-video" 
+          controls 
+          preload="metadata"
+        />
+      )}
+      
+      {items.length > 1 && (
+        <>
+          <button className="carousel-btn prev" onClick={prevMedia}>
+            &#8249;
+          </button>
+          <button className="carousel-btn next" onClick={nextMedia}>
+            &#8250;
+          </button>
+          <div className="carousel-dots">
+            {items.map((_, i) => (
+              <span 
+                key={i} 
+                className={`carousel-dot ${i === index ? 'active' : ''}`}
+                onClick={(e) => { e.stopPropagation(); setIndex(i); }}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 const Feed = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -25,12 +91,32 @@ const Feed = () => {
 
   // Create post states
   const [caption, setCaption] = useState('');
-  const [mediaFile, setMediaFile] = useState(null);
-  const [mediaPreview, setMediaPreview] = useState('');
-  const [mediaType, setMediaType] = useState(''); // 'image' or 'video'
+  const [mediaFiles, setMediaFiles] = useState([]); // Array of File objects
+  const [mediaPreviews, setMediaPreviews] = useState([]); // Array of { url, type, name }
+  const [albumId, setAlbumId] = useState('');
+  const [visibility, setVisibility] = useState('public');
+  const [albums, setAlbums] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef(null);
+
+  // Fetch user albums when component mounts/user changes
+  useEffect(() => {
+    if (user?.id) {
+      fetchUserAlbums();
+    }
+  }, [user]);
+
+  const fetchUserAlbums = async () => {
+    try {
+      const response = await api.get(`/users/${user.id}/albums`);
+      if (response.success) {
+        setAlbums(response.data || []);
+      }
+    } catch (err) {
+      console.error('Error fetching user albums:', err);
+    }
+  };
 
   // Comments drawer states
   const [activePostForComments, setActivePostForComments] = useState(null);
@@ -248,25 +334,32 @@ const Feed = () => {
 
   // File Upload Handlers
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    processSelectedFile(file);
+    const files = Array.from(e.target.files);
+    processSelectedFiles(files);
   };
 
-  const processSelectedFile = (file) => {
-    if (!file) return;
+  const processSelectedFiles = (files) => {
+    if (!files || files.length === 0) return;
 
-    const fileType = file.type.split('/')[0];
-    if (fileType !== 'image' && fileType !== 'video') {
-      alert("Unsupported file format! Please upload an image or video.");
-      return;
-    }
+    const newFiles = [];
+    const newPreviews = [];
 
-    setMediaFile(file);
-    setMediaType(fileType);
-    
-    // Create preview URL
-    const previewUrl = URL.createObjectURL(file);
-    setMediaPreview(previewUrl);
+    files.forEach(file => {
+      const fileType = file.type.split('/')[0];
+      if (fileType !== 'image' && fileType !== 'video') {
+        alert(`Unsupported file format for ${file.name}! Please upload images or videos.`);
+        return;
+      }
+      newFiles.push(file);
+      newPreviews.push({
+        url: URL.createObjectURL(file),
+        type: fileType,
+        name: file.name
+      });
+    });
+
+    setMediaFiles(prev => [...prev, ...newFiles]);
+    setMediaPreviews(prev => [...prev, ...newPreviews]);
   };
 
   const handleDrag = (e) => {
@@ -284,30 +377,40 @@ const Feed = () => {
     e.stopPropagation();
     setDragActive(false);
 
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processSelectedFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const files = Array.from(e.dataTransfer.files);
+      processSelectedFiles(files);
     }
   };
 
-  const removeSelectedMedia = () => {
-    setMediaFile(null);
-    setMediaPreview('');
-    setMediaType('');
+  const removeSelectedMedia = (index) => {
+    setMediaFiles(prev => prev.filter((_, i) => i !== index));
+    setMediaPreviews(prev => {
+      URL.revokeObjectURL(prev[index].url);
+      return prev.filter((_, i) => i !== index);
+    });
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   // Submit Post
   const handleCreatePost = async (e) => {
     e.preventDefault();
-    if (!mediaFile) {
-      alert("Please select or drop an image/video first!");
+    if (mediaFiles.length === 0) {
+      alert("Please select or drop at least one image/video first!");
       return;
     }
 
     setUploading(true);
     const formData = new FormData();
     formData.append('caption', caption);
-    formData.append('media', mediaFile);
+    formData.append('visibility', visibility);
+    if (albumId) {
+      formData.append('album_id', albumId);
+    }
+
+    mediaFiles.forEach(file => {
+      formData.append('media', file);
+    });
 
     try {
       const response = await api.post('/posts', formData, {
@@ -331,7 +434,12 @@ const Feed = () => {
         
         // Reset form state
         setCaption('');
-        removeSelectedMedia();
+        setAlbumId('');
+        setVisibility('public');
+        // Revoke all preview URLs
+        mediaPreviews.forEach(p => URL.revokeObjectURL(p.url));
+        setMediaFiles([]);
+        setMediaPreviews([]);
       }
     } catch (err) {
       alert(err.message || "Failed to create post. Media size limit could be exceeded.");
@@ -374,20 +482,20 @@ const Feed = () => {
           />
         </div>
 
-        {mediaPreview ? (
-          <div className="preview-container">
-            <div 
-              className="preview-media-blur-bg" 
-              style={mediaType === 'image' ? { backgroundImage: `url(${mediaPreview})` } : {}} 
-            />
-            {mediaType === 'image' ? (
-              <img src={mediaPreview} className="media-preview" alt="Preview" />
-            ) : (
-              <video src={mediaPreview} className="media-preview" controls />
-            )}
-            <button className="remove-media-btn" onClick={removeSelectedMedia}>
-              <X size={18} />
-            </button>
+        {mediaPreviews.length > 0 ? (
+          <div className="previews-carousel">
+            {mediaPreviews.map((preview, idx) => (
+              <div key={idx} className="preview-item">
+                {preview.type === 'image' ? (
+                  <img src={preview.url} alt="preview" className="preview-media-thumb" />
+                ) : (
+                  <video src={preview.url} className="preview-media-thumb" muted />
+                )}
+                <button className="remove-thumb-btn" onClick={() => removeSelectedMedia(idx)}>
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
           </div>
         ) : (
           <div 
@@ -399,41 +507,63 @@ const Feed = () => {
             onClick={() => fileInputRef.current?.click()}
           >
             <UploadCloud size={32} style={{ color: 'hsl(var(--primary))' }} />
-            <p style={{ fontWeight: '600', fontSize: '0.9rem' }}>Drag & Drop file or Click to Browse</p>
-            <p style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Supports Image or Video (Max 50MB)</p>
+            <p style={{ fontWeight: '600', fontSize: '0.9rem' }}>Drag & Drop files or Click to Browse</p>
+            <p style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>Supports multiple Images or Videos (Max 50MB per file)</p>
             <input
               type="file"
               ref={fileInputRef}
               style={{ display: 'none' }}
               onChange={handleFileChange}
               accept="image/*,video/*"
+              multiple
             />
           </div>
         )}
 
-        <div className="create-post-footer">
-          <div className="media-upload-options">
-            <span className="icon-btn-opt" onClick={() => { fileInputRef.current?.click(); }}>
-              <Image size={18} /> Image
-            </span>
-            <span className="icon-btn-opt" onClick={() => { fileInputRef.current?.click(); }}>
-              <Film size={18} /> Video
-            </span>
-          </div>
+        <div className="create-post-footer" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '12px' }}>
+          <div className="post-form-options">
+            <select 
+              className="select-input-opt"
+              value={albumId}
+              onChange={(e) => setAlbumId(e.target.value)}
+            >
+              <option value="">No Album</option>
+              {albums.map(album => (
+                <option key={album.id} value={album.id}>{album.title}</option>
+              ))}
+            </select>
 
-          <button 
-            className="btn btn-primary" 
-            onClick={handleCreatePost} 
-            disabled={uploading || !mediaFile}
-          >
-            {uploading ? (
-              <div className="spinner" style={{ width: '20px', height: '20px' }}></div>
-            ) : (
-              <>
-                Share <Send size={15} />
-              </>
-            )}
-          </button>
+            <select 
+              className="select-input-opt"
+              value={visibility}
+              onChange={(e) => setVisibility(e.target.value)}
+            >
+              <option value="public">Public</option>
+              <option value="followers">Followers Only</option>
+            </select>
+          </div>
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+            <div className="media-upload-options">
+              <span className="icon-btn-opt" onClick={() => { fileInputRef.current?.click(); }}>
+                <Image size={18} /> Add Media
+              </span>
+            </div>
+
+            <button 
+              className="btn btn-primary" 
+              onClick={handleCreatePost} 
+              disabled={uploading || mediaFiles.length === 0}
+            >
+              {uploading ? (
+                <div className="spinner" style={{ width: '20px', height: '20px' }}></div>
+              ) : (
+                <>
+                  Share <Send size={15} />
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -506,27 +636,7 @@ const Feed = () => {
                 )}
 
                 {/* Post Media */}
-                <div className="post-media-container">
-                  <div 
-                    className="post-media-blur-bg" 
-                    style={post.media_type === 'image' ? { backgroundImage: `url(${formattedMediaUrl})` } : { background: 'linear-gradient(to bottom, #111, #000)' }}
-                  />
-                  {post.media_type === 'image' ? (
-                    <img 
-                      src={formattedMediaUrl} 
-                      className="post-image" 
-                      alt="Post content" 
-                      loading="lazy"
-                    />
-                  ) : (
-                    <video 
-                      src={formattedMediaUrl} 
-                      className="post-video" 
-                      controls 
-                      preload="metadata"
-                    />
-                  )}
-                </div>
+                <PostMedia media={post.media} defaultUrl={post.media_url} defaultType={post.media_type} />
 
                 {/* Actions */}
                 <div className="post-actions-bar">

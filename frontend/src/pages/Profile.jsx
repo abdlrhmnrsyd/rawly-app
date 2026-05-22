@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   User, Settings, Camera, Grid, Heart, MessageSquare, 
-  UserPlus, UserMinus, ShieldAlert, Sparkles, X, Edit3, Mail, Trash2, Send
+  UserPlus, UserMinus, ShieldAlert, Sparkles, X, Edit3, Mail, Trash2, Send, Lock, Plus
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api, { API_BASE_URL } from '../services/api';
@@ -11,6 +11,74 @@ import './Profile.css';
 
 // Extract backend host URL
 const BACKEND_HOST = API_BASE_URL.replace('/api', '');
+
+// Premium Carousel component for multi-media rendering
+const PostMedia = ({ media, defaultUrl, defaultType }) => {
+  const [index, setIndex] = useState(0);
+
+  // Fallback to legacy single file parameters if media array is empty
+  const items = media && media.length > 0 ? media : [{ media_url: defaultUrl, media_type: defaultType }];
+
+  const nextMedia = (e) => {
+    e.stopPropagation();
+    setIndex((prev) => (prev + 1) % items.length);
+  };
+
+  const prevMedia = (e) => {
+    e.stopPropagation();
+    setIndex((prev) => (prev - 1 + items.length) % items.length);
+  };
+
+  const currentItem = items[index];
+  if (!currentItem || !currentItem.media_url) return null;
+  const formattedUrl = currentItem.media_url.startsWith('http') ? currentItem.media_url : `${BACKEND_HOST}${currentItem.media_url}`;
+
+  return (
+    <div className="post-media-container" style={{ width: '100%', height: '100%', minHeight: '350px' }}>
+      <div 
+        className="post-media-blur-bg" 
+        style={currentItem.media_type === 'image' ? { backgroundImage: `url(${formattedUrl})` } : { background: 'linear-gradient(to bottom, #111, #000)' }}
+      />
+      {currentItem.media_type === 'image' ? (
+        <img 
+          src={formattedUrl} 
+          className="post-image" 
+          alt="Post content" 
+          loading="lazy"
+          style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain', position: 'relative', zIndex: 2 }}
+        />
+      ) : (
+        <video 
+          src={formattedUrl} 
+          className="post-video" 
+          controls 
+          preload="metadata"
+          style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain', position: 'relative', zIndex: 2 }}
+        />
+      )}
+      
+      {items.length > 1 && (
+        <>
+          <button className="carousel-btn prev" onClick={prevMedia}>
+            &#8249;
+          </button>
+          <button className="carousel-btn next" onClick={nextMedia}>
+            &#8250;
+          </button>
+          <div className="carousel-dots">
+            {items.map((_, i) => (
+              <span 
+                key={i} 
+                className={`carousel-dot ${i === index ? 'active' : ''}`}
+                onClick={(e) => { e.stopPropagation(); setIndex(i); }}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
 const Profile = () => {
   const { username } = useParams();
@@ -40,26 +108,62 @@ const Profile = () => {
   const [postComments, setPostComments] = useState([]);
   const [loadingComments, setLoadingComments] = useState(false);
   const [newCommentText, setNewCommentText] = useState('');
+  const [editIsPrivate, setEditIsPrivate] = useState(false);
+
+  // Follow Requests states
+  const [followRequests, setFollowRequests] = useState([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
+
+  // Albums states
+  const [albums, setAlbums] = useState([]);
+  const [loadingAlbums, setLoadingAlbums] = useState(false);
+  const [createAlbumModalOpen, setCreateAlbumModalOpen] = useState(false);
+  const [newAlbumTitle, setNewAlbumTitle] = useState('');
+  const [newAlbumDesc, setNewAlbumDesc] = useState('');
+  const [newAlbumVisibility, setNewAlbumVisibility] = useState('public');
+  const [creatingAlbum, setCreatingAlbum] = useState(false);
+
+  // Selected Album Detail Modal states
+  const [selectedAlbum, setSelectedAlbum] = useState(null);
+  const [albumPosts, setAlbumPosts] = useState([]);
+  const [loadingAlbumPosts, setLoadingAlbumPosts] = useState(false);
 
   const isOwnProfile = currentUser && currentUser.username === username;
 
   useEffect(() => {
     fetchProfileData();
-    fetchUserPosts();
-    // Close modal on route change
+    // Close modals on route change
     setSelectedPost(null);
-  }, [username]);
+    setSelectedAlbum(null);
+  }, [username, currentUser]);
 
   const fetchProfileData = async () => {
     setLoading(true);
     try {
       const response = await api.get(`/users/profile/${username}`);
       if (response.success && response.data) {
-        setProfile(response.data);
+        const profileData = response.data;
+        setProfile(profileData);
         // Pre-fill edit inputs if own profile
-        setEditUsername(response.data.username);
-        setEditEmail(response.data.email);
-        setEditBio(response.data.bio || '');
+        setEditUsername(profileData.username);
+        setEditEmail(profileData.email);
+        setEditBio(profileData.bio || '');
+        setEditIsPrivate(profileData.is_private);
+
+        const canViewContent = isOwnProfile || !profileData.is_private || profileData.follow_status === 'accepted';
+        if (canViewContent) {
+          fetchUserPosts();
+          fetchUserAlbums(profileData.id);
+        } else {
+          setPosts([]);
+          setAlbums([]);
+        }
+
+        if (isOwnProfile) {
+          fetchFollowRequests();
+        } else {
+          setFollowRequests([]);
+        }
       }
     } catch (err) {
       console.error('Error fetching profile:', err);
@@ -83,6 +187,115 @@ const Profile = () => {
     }
   };
 
+  const fetchUserAlbums = async (targetUserID) => {
+    const idToFetch = targetUserID || (profile && profile.id);
+    if (!idToFetch) return;
+    setLoadingAlbums(true);
+    try {
+      const response = await api.get(`/users/${idToFetch}/albums`);
+      if (response.success && Array.isArray(response.data)) {
+        setAlbums(response.data);
+      }
+    } catch (err) {
+      console.error('Error fetching user albums:', err);
+    } finally {
+      setLoadingAlbums(false);
+    }
+  };
+
+  const fetchFollowRequests = async () => {
+    setLoadingRequests(true);
+    try {
+      const response = await api.get('/users/follow-requests');
+      if (response.success && Array.isArray(response.data)) {
+        setFollowRequests(response.data);
+      }
+    } catch (err) {
+      console.error('Error fetching follow requests:', err);
+    } finally {
+      setLoadingRequests(false);
+    }
+  };
+
+  const handleAcceptRequest = async (followerID) => {
+    try {
+      const response = await api.post(`/users/follow-requests/${followerID}/accept`);
+      if (response.success) {
+        setFollowRequests(prev => prev.filter(r => r.user_id !== followerID));
+        fetchProfileData(); // refresh profile details (e.g. followers count)
+      }
+    } catch (err) {
+      alert('Failed to accept follow request');
+    }
+  };
+
+  const handleDeclineRequest = async (followerID) => {
+    try {
+      const response = await api.post(`/users/follow-requests/${followerID}/decline`);
+      if (response.success) {
+        setFollowRequests(prev => prev.filter(r => r.user_id !== followerID));
+      }
+    } catch (err) {
+      alert('Failed to decline follow request');
+    }
+  };
+
+  const handleCreateAlbumSubmit = async (e) => {
+    e.preventDefault();
+    if (!newAlbumTitle.trim()) return;
+    setCreatingAlbum(true);
+    try {
+      const response = await api.post('/albums', {
+        title: newAlbumTitle.trim(),
+        description: newAlbumDesc.trim(),
+        visibility: newAlbumVisibility
+      });
+      if (response.success && response.data) {
+        setAlbums(prev => [response.data, ...prev]);
+        setCreateAlbumModalOpen(false);
+        setNewAlbumTitle('');
+        setNewAlbumDesc('');
+        setNewAlbumVisibility('public');
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to create album');
+    } finally {
+      setCreatingAlbum(false);
+    }
+  };
+
+  const handleDeleteAlbum = async (e, albumID) => {
+    e.stopPropagation();
+    if (!window.confirm("Are you sure you want to delete this album? Your posts won't be deleted, but the album itself will be removed.")) return;
+    try {
+      const response = await api.delete(`/albums/${albumID}`);
+      if (response.success) {
+        setAlbums(prev => prev.filter(album => album.id !== albumID));
+        if (selectedAlbum && selectedAlbum.id === albumID) {
+          setSelectedAlbum(null);
+        }
+      }
+    } catch (err) {
+      alert('Failed to delete album');
+    }
+  };
+
+  const openAlbumDetail = async (album) => {
+    setSelectedAlbum(album);
+    setLoadingAlbumPosts(true);
+    setAlbumPosts([]);
+    try {
+      const response = await api.get(`/albums/${album.id}/posts`);
+      if (response.success && Array.isArray(response.data)) {
+        setAlbumPosts(response.data);
+      }
+    } catch (err) {
+      console.error('Error fetching album posts:', err);
+    } finally {
+      setLoadingAlbumPosts(false);
+    }
+  };
+
   const handleFollowToggle = async () => {
     if (!currentUser) {
       navigate('/login');
@@ -90,25 +303,48 @@ const Profile = () => {
     }
     if (!profile) return;
 
-    const originalFollowingState = profile.is_following;
+    const isCurrentlyFollowedOrPending = profile.follow_status === 'accepted' || profile.follow_status === 'pending';
+    const originalFollowStatus = profile.follow_status;
     const originalFollowersCount = profile.followers_count;
 
     // Optimistic UI updates
-    setProfile(prev => ({
-      ...prev,
-      is_following: !originalFollowingState,
-      followers_count: originalFollowingState ? originalFollowersCount - 1 : originalFollowersCount + 1
-    }));
+    setProfile(prev => {
+      let nextStatus = 'none';
+      let nextFollowerCount = prev.followers_count;
+      
+      if (isCurrentlyFollowedOrPending) {
+        nextStatus = 'none';
+        if (originalFollowStatus === 'accepted') {
+          nextFollowerCount = Math.max(0, prev.followers_count - 1);
+        }
+      } else {
+        nextStatus = prev.is_private ? 'pending' : 'accepted';
+        if (!prev.is_private) {
+          nextFollowerCount = prev.followers_count + 1;
+        }
+      }
+      
+      return {
+        ...prev,
+        follow_status: nextStatus,
+        followers_count: nextFollowerCount
+      };
+    });
 
     try {
-      const endpoint = `/users/${originalFollowingState ? 'unfollow' : 'follow'}/${profile.id}`;
+      const endpoint = `/users/${isCurrentlyFollowedOrPending ? 'unfollow' : 'follow'}/${profile.id}`;
       await api.post(endpoint);
+      // Re-fetch profile data to stay in sync with the database
+      const response = await api.get(`/users/profile/${username}`);
+      if (response.success && response.data) {
+        setProfile(response.data);
+      }
     } catch (err) {
       console.error('Error toggling follow:', err);
       // Revert if failed
       setProfile(prev => ({
         ...prev,
-        is_following: originalFollowingState,
+        follow_status: originalFollowStatus,
         followers_count: originalFollowersCount
       }));
     }
@@ -170,7 +406,8 @@ const Profile = () => {
       const response = await api.put('/users/profile', {
         username: editUsername.trim(),
         email: editEmail.trim(),
-        bio: editBio.trim()
+        bio: editBio.trim(),
+        is_private: editIsPrivate
       });
 
       if (response.success && response.data) {
@@ -179,7 +416,8 @@ const Profile = () => {
           ...prev,
           username: updated.username,
           email: updated.email,
-          bio: updated.bio
+          bio: updated.bio,
+          is_private: updated.is_private
         }));
 
         // Sync context
@@ -364,14 +602,21 @@ const Profile = () => {
             
             <div className="profile-actions">
               {isOwnProfile ? (
-                <button className="btn btn-secondary" onClick={() => setEditModalOpen(true)}>
+                <button className="btn btn-secondary" onClick={() => {
+                  setEditIsPrivate(profile.is_private);
+                  setEditModalOpen(true);
+                }}>
                   <Settings size={16} /> Edit Profile
                 </button>
               ) : profile.is_banned ? (
                 <span className="btn-banned-badge">Account Banned</span>
-              ) : profile.is_following ? (
+              ) : profile.follow_status === 'accepted' ? (
                 <button className="btn btn-following" onClick={handleFollowToggle}>
                   <UserMinus size={16} /> Following
+                </button>
+              ) : profile.follow_status === 'pending' ? (
+                <button className="btn btn-following" onClick={handleFollowToggle}>
+                  <UserMinus size={16} /> Requested
                 </button>
               ) : (
                 <button className="btn btn-follow" onClick={handleFollowToggle}>
@@ -404,55 +649,170 @@ const Profile = () => {
         </div>
       </div>
 
-      {/* Grid Tabs */}
-      <div className="profile-tabs-header">
-        <button 
-          className={`profile-tab ${activeTab === 'posts' ? 'active' : ''}`}
-          onClick={() => setActiveTab('posts')}
-        >
-          <Grid size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
-          POSTS
-        </button>
-      </div>
-
-      {/* Posts Section */}
-      {loadingPosts ? (
-        <LoadingSpinner />
-      ) : posts.length === 0 ? (
-        <div className="empty-posts glass">
-          <Grid size={40} style={{ color: 'hsl(var(--text-muted))' }} />
-          <h3>No Posts Yet</h3>
-          <p>{isOwnProfile ? 'Share your first spectacular image or video!' : 'This user hasn\'t posted anything yet.'}</p>
-        </div>
-      ) : (
-        <div className="posts-grid">
-          {posts.map((post) => {
-            const formattedMediaUrl = post.media_url.startsWith('http') ? post.media_url : `${BACKEND_HOST}${post.media_url}`;
-            return (
-              <div 
-                key={post.id} 
-                className="grid-post-item"
-                onClick={() => openPostDetail(post)}
-              >
-                {post.media_type === 'video' ? (
-                  <>
-                    <video src={formattedMediaUrl} className="grid-media" preload="metadata" muted />
-                    <div className="grid-video-icon">
-                      <Camera size={14} />
-                    </div>
-                  </>
-                ) : (
-                  <img src={formattedMediaUrl} className="grid-media" alt="Post" loading="lazy" />
-                )}
-
-                <div className="grid-overlay">
-                  <span className="overlay-stat"><Heart size={16} fill="white" /> {post.likes_count}</span>
-                  <span className="overlay-stat"><MessageSquare size={16} fill="white" /> {post.comments_count}</span>
+      {/* Follow Requests Panel */}
+      {isOwnProfile && followRequests.length > 0 && (
+        <div className="follow-requests-panel glass fade-in">
+          <h4>Follow Requests ({followRequests.length})</h4>
+          <div className="requests-list">
+            {followRequests.map((req) => (
+              <div key={req.id} className="request-item">
+                <div className="request-user" onClick={() => navigate(`/profile/${req.username}`)}>
+                  {renderCommentAvatar(req.avatar)}
+                  <span>@{req.username}</span>
+                </div>
+                <div className="request-actions">
+                  <button className="btn btn-primary btn-sm" onClick={() => handleAcceptRequest(req.user_id)}>
+                    Accept
+                  </button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleDeclineRequest(req.user_id)}>
+                    Decline
+                  </button>
                 </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
+      )}
+
+      {/* Conditional Lock Screen or Tabs Content */}
+      {!isOwnProfile && profile.is_private && profile.follow_status !== 'accepted' ? (
+        <div className="private-profile-lock glass fade-in">
+          <Lock size={40} style={{ color: 'hsl(var(--text-muted))', marginBottom: '12px' }} />
+          <h3>This Account is Private</h3>
+          <p>Follow this account to see their photos and videos.</p>
+        </div>
+      ) : (
+        <>
+          {/* Grid Tabs */}
+          <div className="profile-tabs-header">
+            <button 
+              className={`profile-tab ${activeTab === 'posts' ? 'active' : ''}`}
+              onClick={() => setActiveTab('posts')}
+            >
+              <Grid size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+              POSTS
+            </button>
+            <button 
+              className={`profile-tab ${activeTab === 'albums' ? 'active' : ''}`}
+              onClick={() => setActiveTab('albums')}
+            >
+              <Sparkles size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+              ALBUMS
+            </button>
+          </div>
+
+          {/* Posts Tab Content */}
+          {activeTab === 'posts' && (
+            loadingPosts ? (
+              <LoadingSpinner />
+            ) : posts.length === 0 ? (
+              <div className="empty-posts glass">
+                <Grid size={40} style={{ color: 'hsl(var(--text-muted))' }} />
+                <h3>No Posts Yet</h3>
+                <p>{isOwnProfile ? 'Share your first spectacular image or video!' : 'This user hasn\'t posted anything yet.'}</p>
+              </div>
+            ) : (
+              <div className="posts-grid">
+                {posts.map((post) => {
+                  const formattedMediaUrl = post.media_url.startsWith('http') ? post.media_url : `${BACKEND_HOST}${post.media_url}`;
+                  return (
+                    <div 
+                      key={post.id} 
+                      className="grid-post-item"
+                      onClick={() => openPostDetail(post)}
+                    >
+                      {post.media_type === 'video' ? (
+                        <>
+                          <video src={formattedMediaUrl} className="grid-media" preload="metadata" muted />
+                          <div className="grid-video-icon">
+                            <Camera size={14} />
+                          </div>
+                        </>
+                      ) : (
+                        <img src={formattedMediaUrl} className="grid-media" alt="Post" loading="lazy" />
+                      )}
+
+                      <div className="grid-overlay">
+                        <span className="overlay-stat"><Heart size={16} fill="white" /> {post.likes_count}</span>
+                        <span className="overlay-stat"><MessageSquare size={16} fill="white" /> {post.comments_count}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          )}
+
+          {/* Albums Tab Content */}
+          {activeTab === 'albums' && (
+            <div className="albums-container fade-in">
+              {isOwnProfile && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
+                  <button className="btn btn-primary" onClick={() => setCreateAlbumModalOpen(true)}>
+                    <Plus size={16} style={{ marginRight: '6px' }} /> Create New Album
+                  </button>
+                </div>
+              )}
+
+              {loadingAlbums ? (
+                <LoadingSpinner />
+              ) : albums.length === 0 ? (
+                <div className="empty-posts glass">
+                  <Sparkles size={40} style={{ color: 'hsl(var(--text-muted))' }} />
+                  <h3>No Albums Yet</h3>
+                  <p>{isOwnProfile ? 'Create albums to organize your collection!' : 'This user has not created any albums yet.'}</p>
+                </div>
+              ) : (
+                <div className="albums-grid">
+                  {albums.map((album) => {
+                    let coverUrl = '';
+                    if (album.posts && album.posts.length > 0) {
+                      const firstPost = album.posts[0];
+                      if (firstPost.media && firstPost.media.length > 0) {
+                        const mUrl = firstPost.media[0].media_url;
+                        coverUrl = mUrl.startsWith('http') ? mUrl : `${BACKEND_HOST}${mUrl}`;
+                      } else if (firstPost.media_url) {
+                        const mUrl = firstPost.media_url;
+                        coverUrl = mUrl.startsWith('http') ? mUrl : `${BACKEND_HOST}${mUrl}`;
+                      }
+                    }
+
+                    return (
+                      <div key={album.id} className="album-card" onClick={() => openAlbumDetail(album)}>
+                        <div className="album-cover-wrap">
+                          {coverUrl ? (
+                            <img src={coverUrl} className="album-cover" alt={album.title} />
+                          ) : (
+                            <div className="album-cover-fallback">
+                              <Sparkles size={32} />
+                            </div>
+                          )}
+                        </div>
+                        <div className="album-info-overlay">
+                          <div className="album-title-row">
+                            <span className="album-title">{album.title}</span>
+                            {isOwnProfile && (
+                              <button className="btn-text" style={{ padding: 4, color: 'hsl(var(--danger))' }} onClick={(e) => handleDeleteAlbum(e, album.id)}>
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
+                          {album.description && <p className="album-desc">{album.description}</p>}
+                          <div className="album-actions-row">
+                            <span>{album.posts ? album.posts.length : 0} posts</span>
+                            <span style={{ textTransform: 'capitalize', fontSize: '0.7rem', padding: '2px 6px', background: 'hsla(255, 255, 255, 0.05)', borderRadius: '4px' }}>
+                              {album.visibility}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       {/* Edit Profile Modal */}
@@ -518,6 +878,22 @@ const Profile = () => {
                 />
               </div>
 
+              {/* Privacy toggle */}
+              <div className="switch-container">
+                <div className="switch-label-wrap">
+                  <span className="switch-label-title">Private Account</span>
+                  <span className="switch-label-desc">Only approved followers can see your posts and albums.</span>
+                </div>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={editIsPrivate}
+                    onChange={(e) => setEditIsPrivate(e.target.checked)}
+                  />
+                  <span className="slider"></span>
+                </label>
+              </div>
+
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '16px' }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setEditModalOpen(false)}>
                   Cancel
@@ -527,6 +903,134 @@ const Profile = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Album Modal */}
+      {createAlbumModalOpen && (
+        <div className="modal-overlay" onClick={() => setCreateAlbumModalOpen(false)}>
+          <div className="modal-content glass" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <h3 style={{ fontFamily: 'var(--font-secondary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Sparkles style={{ color: 'hsl(var(--primary))' }} /> Create New Album
+              </h3>
+              <button className="drawer-close" onClick={() => setCreateAlbumModalOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleCreateAlbumSubmit}>
+              <div className="form-group">
+                <label className="form-label">Album Title</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. Vacation 2026"
+                  value={newAlbumTitle}
+                  onChange={(e) => setNewAlbumTitle(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Description</label>
+                <textarea
+                  className="form-input"
+                  style={{ minHeight: '80px', resize: 'none', background: 'hsla(220, 20%, 8%, 0.8)' }}
+                  placeholder="What is this album about?"
+                  value={newAlbumDesc}
+                  onChange={(e) => setNewAlbumDesc(e.target.value)}
+                  maxLength={200}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Visibility</label>
+                <select
+                  className="form-input select-input-opt"
+                  style={{ background: 'hsla(220, 20%, 8%, 0.8)' }}
+                  value={newAlbumVisibility}
+                  onChange={(e) => setNewAlbumVisibility(e.target.value)}
+                >
+                  <option value="public">Public</option>
+                  <option value="followers">Followers Only</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '16px' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setCreateAlbumModalOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={creatingAlbum}>
+                  {creatingAlbum ? 'Creating...' : 'Create Album'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Selected Album Detail Modal */}
+      {selectedAlbum && (
+        <div className="modal-overlay" onClick={() => setSelectedAlbum(null)}>
+          <div 
+            className="modal-content glass fade-in" 
+            onClick={(e) => e.stopPropagation()} 
+            style={{ 
+              maxWidth: '800px', 
+              width: '95%', 
+              maxHeight: '80vh', 
+              overflowY: 'auto',
+              padding: '24px'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid hsla(var(--border-color), 0.5)', paddingBottom: '12px' }}>
+              <div>
+                <h3 style={{ fontFamily: 'var(--font-secondary)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                  <Sparkles style={{ color: 'hsl(var(--primary))' }} /> {selectedAlbum.title}
+                </h3>
+                {selectedAlbum.description && <p style={{ fontSize: '0.88rem', color: 'hsl(var(--text-secondary))', margin: '4px 0 0 0' }}>{selectedAlbum.description}</p>}
+              </div>
+              <button className="drawer-close" onClick={() => setSelectedAlbum(null)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {loadingAlbumPosts ? (
+              <LoadingSpinner />
+            ) : albumPosts.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 0', color: 'hsl(var(--text-muted))' }}>
+                No posts inside this album.
+              </div>
+            ) : (
+              <div className="posts-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                {albumPosts.map((post) => {
+                  const formattedMediaUrl = post.media_url.startsWith('http') ? post.media_url : `${BACKEND_HOST}${post.media_url}`;
+                  return (
+                    <div 
+                      key={post.id} 
+                      className="grid-post-item"
+                      onClick={() => {
+                        setSelectedPost(post);
+                        openPostDetail(post);
+                      }}
+                    >
+                      {post.media_type === 'video' ? (
+                        <>
+                          <video src={formattedMediaUrl} className="grid-media" preload="metadata" muted />
+                          <div className="grid-video-icon">
+                            <Camera size={14} />
+                          </div>
+                        </>
+                      ) : (
+                        <img src={formattedMediaUrl} className="grid-media" alt="Post" loading="lazy" />
+                      )}
+                      <div className="grid-overlay">
+                        <span className="overlay-stat"><Heart size={16} fill="white" /> {post.likes_count}</span>
+                        <span className="overlay-stat"><MessageSquare size={16} fill="white" /> {post.comments_count}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -549,29 +1053,12 @@ const Profile = () => {
             }}
           >
             {/* Left side: Media */}
-            <div className="modal-media-wrap">
-              <div 
-                className="modal-media-blur-bg"
-                style={
-                  selectedPost.media_type === 'image'
-                    ? { backgroundImage: `url(${selectedPost.media_url.startsWith('http') ? selectedPost.media_url : BACKEND_HOST + selectedPost.media_url})` }
-                    : { background: 'linear-gradient(to bottom, #111, #000)' }
-                }
+            <div className="modal-media-wrap" style={{ position: 'relative', overflow: 'hidden' }}>
+              <PostMedia 
+                media={selectedPost.media} 
+                defaultUrl={selectedPost.media_url} 
+                defaultType={selectedPost.media_type} 
               />
-              {selectedPost.media_type === 'video' ? (
-                <video 
-                  src={selectedPost.media_url.startsWith('http') ? selectedPost.media_url : `${BACKEND_HOST}${selectedPost.media_url}`} 
-                  className="modal-media-main"
-                  controls 
-                  autoPlay 
-                />
-              ) : (
-                <img 
-                  src={selectedPost.media_url.startsWith('http') ? selectedPost.media_url : `${BACKEND_HOST}${selectedPost.media_url}`} 
-                  className="modal-media-main"
-                  alt="Post detail" 
-                />
-              )}
             </div>
 
             {/* Right side: Author, caption & comments */}

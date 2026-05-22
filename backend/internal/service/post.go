@@ -15,21 +15,24 @@ var (
 )
 
 type PostResponse struct {
-	ID            uuid.UUID `json:"id"`
-	Caption       string    `json:"caption"`
-	MediaURL      string    `json:"media_url"`
-	MediaType     string    `json:"media_type"` // 'image', 'video'
-	CreatedAt     time.Time `json:"created_at"`
-	UserID        uuid.UUID `json:"user_id"`
-	Username      string    `json:"username"`
-	Avatar        *string   `json:"avatar"`
-	LikesCount    int64     `json:"likes_count"`
-	CommentsCount int64     `json:"comments_count"`
-	LikedByMe     bool      `json:"liked_by_me"`
+	ID            uuid.UUID          `json:"id"`
+	Caption       string             `json:"caption"`
+	MediaURL      string             `json:"media_url"`
+	MediaType     string             `json:"media_type"` // 'image', 'video'
+	Media         []model.PostMedia  `json:"media,omitempty"`
+	Visibility    string             `json:"visibility"`
+	AlbumID       *uuid.UUID         `json:"album_id,omitempty"`
+	CreatedAt     time.Time          `json:"created_at"`
+	UserID        uuid.UUID          `json:"user_id"`
+	Username      string             `json:"username"`
+	Avatar        *string            `json:"avatar"`
+	LikesCount    int64              `json:"likes_count"`
+	CommentsCount int64              `json:"comments_count"`
+	LikedByMe     bool               `json:"liked_by_me"`
 }
 
 type PostService interface {
-	CreatePost(userID uuid.UUID, caption, mediaURL, mediaType string) (*model.Post, error)
+	CreatePost(userID uuid.UUID, caption string, mediaFiles []model.PostMedia, visibility string, albumID *uuid.UUID) (*model.Post, error)
 	DeletePost(userID uuid.UUID, role string, postID uuid.UUID) error
 	GetPost(postID uuid.UUID, viewerID uuid.UUID) (*PostResponse, error)
 	GetFeed(viewerID uuid.UUID, limit, offset int) ([]PostResponse, error)
@@ -48,13 +51,24 @@ func NewPostService(postRepo repository.PostRepository, userRepo repository.User
 	}
 }
 
-func (s *postService) CreatePost(userID uuid.UUID, caption, mediaURL, mediaType string) (*model.Post, error) {
-	post := &model.Post{
-		UserID:    userID,
-		Caption:   caption,
-		MediaURL:  mediaURL,
-		MediaType: mediaType,
+func (s *postService) CreatePost(userID uuid.UUID, caption string, mediaFiles []model.PostMedia, visibility string, albumID *uuid.UUID) (*model.Post, error) {
+	if len(mediaFiles) == 0 {
+		return nil, errors.New("at least one media file is required")
 	}
+	if visibility == "" {
+		visibility = "public"
+	}
+
+	post := &model.Post{
+		UserID:     userID,
+		Caption:    caption,
+		MediaURL:   mediaFiles[0].MediaURL, // First media URL as fallback
+		MediaType:  mediaFiles[0].MediaType,
+		Media:      mediaFiles,
+		Visibility: visibility,
+		AlbumID:    albumID,
+	}
+
 	if err := s.postRepo.CreatePost(post); err != nil {
 		return nil, err
 	}
@@ -105,6 +119,9 @@ func (s *postService) GetPost(postID uuid.UUID, viewerID uuid.UUID) (*PostRespon
 		Caption:       post.Caption,
 		MediaURL:      post.MediaURL,
 		MediaType:     post.MediaType,
+		Media:         post.Media,
+		Visibility:    post.Visibility,
+		AlbumID:       post.AlbumID,
 		CreatedAt:     post.CreatedAt,
 		UserID:        post.UserID,
 		Username:      post.User.Username,
@@ -116,7 +133,7 @@ func (s *postService) GetPost(postID uuid.UUID, viewerID uuid.UUID) (*PostRespon
 }
 
 func (s *postService) GetFeed(viewerID uuid.UUID, limit, offset int) ([]PostResponse, error) {
-	posts, err := s.postRepo.GetGlobalFeed(limit, offset)
+	posts, err := s.postRepo.GetGlobalFeed(viewerID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +150,7 @@ func (s *postService) GetUserPosts(targetUsername string, viewerID uuid.UUID, li
 		return nil, ErrUserNotFound
 	}
 
-	posts, err := s.postRepo.GetPostsByUserID(user.ID, limit, offset)
+	posts, err := s.postRepo.GetPostsByUserID(user.ID, viewerID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +158,7 @@ func (s *postService) GetUserPosts(targetUsername string, viewerID uuid.UUID, li
 	return s.enrichPosts(posts, viewerID)
 }
 
-// helper function to populate liked state and counts
+// helper function to populate liked state, media files, and stats
 func (s *postService) enrichPosts(posts []model.Post, viewerID uuid.UUID) ([]PostResponse, error) {
 	responses := make([]PostResponse, 0, len(posts))
 
@@ -164,6 +181,9 @@ func (s *postService) enrichPosts(posts []model.Post, viewerID uuid.UUID) ([]Pos
 			Caption:       post.Caption,
 			MediaURL:      post.MediaURL,
 			MediaType:     post.MediaType,
+			Media:         post.Media,
+			Visibility:    post.Visibility,
+			AlbumID:       post.AlbumID,
 			CreatedAt:     post.CreatedAt,
 			UserID:        post.UserID,
 			Username:      post.User.Username,

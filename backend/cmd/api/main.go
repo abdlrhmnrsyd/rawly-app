@@ -71,6 +71,7 @@ func main() {
 	postRepo := repository.NewPostRepository(dbConn)
 	socialRepo := repository.NewSocialRepository(dbConn)
 	adminRepo := repository.NewAdminRepository(dbConn)
+	albumRepo := repository.NewAlbumRepository(dbConn)
 
 	// 8. Instantiate services
 	authService := service.NewAuthService(cfg, authRepo, userRepo)
@@ -78,6 +79,7 @@ func main() {
 	postService := service.NewPostService(postRepo, userRepo)
 	socialService := service.NewSocialService(socialRepo, postRepo)
 	adminService := service.NewAdminService(adminRepo, postRepo)
+	albumService := service.NewAlbumService(albumRepo, userRepo)
 
 	// 9. Instantiate handlers
 	authHandler := handler.NewAuthHandler(authService)
@@ -85,6 +87,7 @@ func main() {
 	postHandler := handler.NewPostHandler(cfg, postService)
 	socialHandler := handler.NewSocialHandler(socialService)
 	adminHandler := handler.NewAdminHandler(adminService)
+	albumHandler := handler.NewAlbumHandler(cfg, albumService)
 
 	// 10. Register API Endpoints
 	api := app.Group("/api")
@@ -100,6 +103,11 @@ func main() {
 	users := api.Group("/users")
 	users.Get("/profile/:username", userHandler.GetProfile)
 	users.Get("/profile/:username/posts", postHandler.GetUserPosts)
+	users.Get("/:userID/albums", albumHandler.GetUserAlbums)
+
+	// Albums Group (Public endpoints)
+	albums := api.Group("/albums")
+	albums.Get("/:id/posts", albumHandler.GetAlbumPosts)
 
 	// Posts Group (Public endpoints)
 	posts := api.Group("/posts")
@@ -117,6 +125,14 @@ func main() {
 	protected.Post("/users/avatar", userHandler.UploadAvatar)
 	protected.Post("/users/follow/:id", userHandler.Follow)
 	protected.Post("/users/unfollow/:id", userHandler.Unfollow)
+	protected.Get("/users/follow-requests", userHandler.GetFollowRequests)
+	protected.Post("/users/follow-requests/:followerID/accept", userHandler.AcceptFollowRequest)
+	protected.Post("/users/follow-requests/:followerID/decline", userHandler.DeclineFollowRequest)
+
+	// Album Auth Routes
+	protected.Post("/albums", albumHandler.CreateAlbum)
+	protected.Put("/albums/:id", albumHandler.UpdateAlbum)
+	protected.Delete("/albums/:id", albumHandler.DeleteAlbum)
 
 	// Post Auth Routes
 	protected.Post("/posts", postHandler.CreatePost)

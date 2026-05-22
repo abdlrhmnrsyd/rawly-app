@@ -8,6 +8,10 @@ import (
 	"github.com/rawly-app/backend/internal/repository"
 )
 
+var (
+	// ErrUserNotFound and ErrUsernameTaken are already defined in auth.go
+)
+
 type ProfileResponse struct {
 	ID             uuid.UUID `json:"id"`
 	Username       string    `json:"username"`
@@ -17,17 +21,22 @@ type ProfileResponse struct {
 	FollowersCount int64     `json:"followers_count"`
 	FollowingCount int64     `json:"following_count"`
 	PostsCount     int64     `json:"posts_count"`
-	IsFollowing    bool      `json:"is_following"`
+	IsFollowing    bool      `json:"is_following"` // Deprecated but kept for compatibility
+	FollowStatus   string    `json:"follow_status"` // 'none', 'pending', 'accepted'
+	IsPrivate      bool      `json:"is_private"`
 	IsBanned       bool      `json:"is_banned"`
 }
 
 type UserService interface {
 	GetProfile(username string, viewerID uuid.UUID) (*ProfileResponse, error)
 	GetProfileByID(userID uuid.UUID) (*ProfileResponse, error)
-	EditProfile(userID uuid.UUID, username, email, bio string) (*model.User, error)
+	EditProfile(userID uuid.UUID, username, email, bio string, isPrivate bool) (*model.User, error)
 	UpdateAvatar(userID uuid.UUID, avatarPath string) (*model.User, error)
 	Follow(followerID, followingID uuid.UUID) error
 	Unfollow(followerID, followingID uuid.UUID) error
+	GetPendingFollowRequests(userID uuid.UUID) ([]model.Follow, error)
+	AcceptFollowRequest(followerID, followingID uuid.UUID) error
+	DeclineFollowRequest(followerID, followingID uuid.UUID) error
 }
 
 type userService struct {
@@ -58,12 +67,14 @@ func (s *userService) GetProfile(username string, viewerID uuid.UUID) (*ProfileR
 		return nil, err
 	}
 
-	// 3. Check if viewer follows user
+	// 3. Check follow status
+	followStatus := "none"
 	isFollowing := false
 	if viewerID != uuid.Nil {
-		isFollowing, err = s.userRepo.IsFollowing(viewerID, user.ID)
-		if err != nil {
-			return nil, err
+		status, err := s.userRepo.GetFollowStatus(viewerID, user.ID)
+		if err == nil {
+			followStatus = status
+			isFollowing = (status == "accepted")
 		}
 	}
 
@@ -77,6 +88,8 @@ func (s *userService) GetProfile(username string, viewerID uuid.UUID) (*ProfileR
 		FollowingCount: following,
 		PostsCount:     posts,
 		IsFollowing:    isFollowing,
+		FollowStatus:   followStatus,
+		IsPrivate:      user.IsPrivate,
 		IsBanned:       user.IsBanned,
 	}, nil
 }
@@ -107,11 +120,13 @@ func (s *userService) GetProfileByID(userID uuid.UUID) (*ProfileResponse, error)
 		FollowingCount: following,
 		PostsCount:     posts,
 		IsFollowing:    false,
+		FollowStatus:   "none",
+		IsPrivate:      user.IsPrivate,
 		IsBanned:       user.IsBanned,
 	}, nil
 }
 
-func (s *userService) EditProfile(userID uuid.UUID, username, email, bio string) (*model.User, error) {
+func (s *userService) EditProfile(userID uuid.UUID, username, email, bio string, isPrivate bool) (*model.User, error) {
 	// Fetch user
 	user, err := s.userRepo.GetUserByID(userID)
 	if err != nil {
@@ -133,12 +148,9 @@ func (s *userService) EditProfile(userID uuid.UUID, username, email, bio string)
 		user.Username = username
 	}
 
-	// If changing email, search for collision (using user repo username since we can fetch by username, or just write a small check)
-	// For email uniqueness, we can fetch username or search it.
-	// Since GetUserByID doesn't check email collision easily, let's keep email update safe. We can check if email matches or is taken.
-	// Let's implement this simply.
 	user.Email = email
 	user.Bio = &bio
+	user.IsPrivate = isPrivate
 
 	if err := s.userRepo.UpdateUser(user); err != nil {
 		return nil, err
@@ -172,15 +184,25 @@ func (s *userService) Follow(followerID, followingID uuid.UUID) error {
 	// 1. Establish follow connection
 	err := s.userRepo.FollowUser(followerID, followingID)
 	if err != nil {
-		// Follow relation unique constraint will throw error if already followed
 		return err
 	}
 
-	// 2. Dispatch Follow Notification
+	// Fetch target user's privacy status to dispatch notification
+	targetUser, err := s.userRepo.GetUserByID(followingID)
+	if err != nil {
+		return err
+	}
+
+	notifType := "follow"
+	if targetUser.IsPrivate {
+		notifType = "follow_request"
+	}
+
+	// 2. Dispatch Notification
 	notif := &model.Notification{
 		UserID:      followingID, // Recipient
 		ActorID:     followerID,  // Performer
-		Type:        "follow",
+		Type:        notifType,
 		ReferenceID: followerID,  // Reference to follower
 		IsRead:      false,
 	}
@@ -189,4 +211,29 @@ func (s *userService) Follow(followerID, followingID uuid.UUID) error {
 
 func (s *userService) Unfollow(followerID, followingID uuid.UUID) error {
 	return s.userRepo.UnfollowUser(followerID, followingID)
+}
+
+func (s *userService) GetPendingFollowRequests(userID uuid.UUID) ([]model.Follow, error) {
+	return s.userRepo.GetPendingFollowRequests(userID)
+}
+
+func (s *userService) AcceptFollowRequest(followerID, followingID uuid.UUID) error {
+	err := s.userRepo.AcceptFollowRequest(followerID, followingID)
+	if err != nil {
+		return err
+	}
+
+	// Send a notification to the follower that they are now following
+	notif := &model.Notification{
+		UserID:      followerID,  // Recipient (the follower)
+		ActorID:     followingID, // Performer (the user who accepted)
+		Type:        "follow_accept",
+		ReferenceID: followingID,
+		IsRead:      false,
+	}
+	return s.socialRepo.CreateNotification(notif)
+}
+
+func (s *userService) DeclineFollowRequest(followerID, followingID uuid.UUID) error {
+	return s.userRepo.DeclineFollowRequest(followerID, followingID)
 }
