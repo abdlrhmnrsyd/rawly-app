@@ -1,6 +1,17 @@
 import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://20.193.159.74:8081/api";
+const getBaseUrl = () => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  // Fall back to relative /api when loaded over HTTPS to support proxy/rewrites (prevents Mixed Content errors)
+  if (typeof window !== "undefined" && window.location.protocol === "https:") {
+    return "/api";
+  }
+  return "http://20.193.159.74:8081/api";
+};
+
+const API_BASE_URL = getBaseUrl();
 
 const api = axios.create({
   baseURL: API_BASE_URL,
