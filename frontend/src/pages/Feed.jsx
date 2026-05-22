@@ -108,9 +108,6 @@ const Feed = () => {
   // Feed posts state
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [fetchingMore, setFetchingMore] = useState(false);
 
   // Create post states
   const [caption, setCaption] = useState("");
@@ -160,48 +157,20 @@ const Feed = () => {
 
   // Fetch initial posts feed
   useEffect(() => {
-    fetchFeed(1, true);
+    fetchFeed();
   }, []);
 
-  const fetchFeed = async (pageNum, isInitial = false) => {
-    if (isInitial) setLoading(true);
-    else setFetchingMore(true);
-
+  const fetchFeed = async () => {
+    setLoading(true);
     try {
-      const response = await api.get(`/posts?page=${pageNum}&limit=10`);
+      const response = await api.get("/posts?page=1&limit=10000");
       if (response.success && Array.isArray(response.data)) {
-        if (isInitial) {
-          setPosts(response.data);
-        } else {
-          setPosts((prev) => {
-            // Filter duplicates
-            const newPosts = response.data.filter(
-              (np) => !prev.some((p) => p.id === np.id),
-            );
-            return [...prev, ...newPosts];
-          });
-        }
-
-        // If we got fewer items than the limit, there are no more posts
-        if (response.data.length < 10) {
-          setHasMore(false);
-        } else {
-          setHasMore(true);
-        }
+        setPosts(response.data);
       }
     } catch (err) {
       console.error("Error fetching feed:", err);
     } finally {
       setLoading(false);
-      setFetchingMore(false);
-    }
-  };
-
-  const loadMorePosts = () => {
-    if (!fetchingMore && hasMore) {
-      const nextPage = page + 1;
-      setPage(nextPage);
-      fetchFeed(nextPage, false);
     }
   };
 
@@ -783,27 +752,7 @@ const Feed = () => {
             );
           })}
 
-          {/* Load More Button */}
-          {hasMore && (
-            <div className="pagination-loader">
-              <button
-                className="btn btn-secondary"
-                onClick={loadMorePosts}
-                disabled={fetchingMore}
-              >
-                {fetchingMore ? (
-                  <div
-                    className="spinner"
-                    style={{ width: "20px", height: "20px" }}
-                  ></div>
-                ) : (
-                  <>
-                    Load More <ChevronRight size={18} />
-                  </>
-                )}
-              </button>
-            </div>
-          )}
+
         </div>
       )}
 

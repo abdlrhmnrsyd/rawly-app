@@ -221,7 +221,7 @@ const Profile = () => {
   const fetchUserPosts = async () => {
     setLoadingPosts(true);
     try {
-      const response = await api.get(`/users/profile/${username}/posts`);
+      const response = await api.get(`/users/profile/${username}/posts?limit=10000`);
       if (response.success && Array.isArray(response.data)) {
         setPosts(response.data);
       }
